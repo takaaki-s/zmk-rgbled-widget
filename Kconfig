@@ -23,10 +23,11 @@ config RGBLED_WIDGET_WS2812
 
 if RGBLED_WIDGET_WS2812
 
+# Zephyr 3.5+ : enabling LED_STRIP is enough. The concrete WS2812 driver
+# (SPI/GPIO) is auto-selected from the devicetree `compatible` node
+# (e.g. "worldsemi,ws2812-spi"), so the deprecated WS2812_STRIP knob is no
+# longer forced here.
 config LED_STRIP
-    default y
-    
-config WS2812_STRIP
     default y
 
 config RGBLED_WIDGET_LED_COUNT
