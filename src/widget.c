@@ -1202,7 +1202,12 @@ extern void led_process_thread(void *d0, void *d1, void *d2) {
         update_all_animations();
 #   endif
 #endif
-        if (result_code != ENOMSG) {
+        // Only act on a real dequeued item. k_msgq_get() returns -EAGAIN on
+        // timeout (empty queue), NOT ENOMSG, so the previous `!= ENOMSG` check
+        // was always true and fed the sentinel {-1,-1,-1} (color=255,
+        // duration=65535) into set_rgb_leds() — blanking the strip and blocking
+        // the thread for 65s. Process only when a message was actually received.
+        if (result_code == 0) {
             if (blink.duration_ms > 0) {
                 LOG_DBG("Got a blink item from msgq, color %d, duration %d", blink.color,
                         blink.duration_ms);
