@@ -459,11 +459,11 @@ static int indicate_battery_enhanced(void) {
     struct animation_state pattern = {0};
     
     if (battery_level == 0) {
-        color_idx = CONFIG_RGBLED_WIDGET_BATTERY_COLOR_MISSING;
-        pattern.type = ANIM_BLINK;
-        pattern.period_ms = 1000;
-        pattern.start_color = color_idx;
-        pattern.end_color = 0; // Black
+        // battery_level 0 means "not reporting / missing", not a real 0%. Stock
+        // cornix has no such indicator (and a truly dead battery cannot light an
+        // LED anyway), so show nothing: leave the battery LED off, no pattern.
+        color_idx = 0; // off
+        pattern.type = ANIM_STATIC;
     } else if (battery_level <= CONFIG_RGBLED_WIDGET_BATTERY_LEVEL_CRITICAL) {
         color_idx = CONFIG_RGBLED_WIDGET_BATTERY_COLOR_CRITICAL;
         // Stock cornix shows low battery as a normal (hard) red blink, not a
@@ -511,8 +511,14 @@ static int indicate_connectivity_ws2812(void) {
 #if IS_ENABLED(CONFIG_RGBLED_WIDGET_CONN_SHOW_USB)
         color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_USB;
         LOG_INF("Enhanced USB connection indication");
-        break;
+#else
+        // On USB the host is connected — don't show any BLE "not connected"
+        // indicator. Turn the connectivity LED off. break unconditionally so we
+        // never fall through into the BLE advertising/disconnected logic below.
+        color_idx = 0; // off
+        LOG_INF("USB connected: connectivity indicator off");
 #endif
+        break;
     default: // ZMK_TRANSPORT_BLE
 #if IS_ENABLED(CONFIG_ZMK_BLE)
         if (zmk_ble_active_profile_is_connected()) {
@@ -799,8 +805,14 @@ static int set_led_with_sharing(uint8_t led_index, uint8_t color_idx, uint8_t pr
     
     // Set the LED color
     ws2812_set_led(led_index, color_idx);
-    
-    LOG_DBG("Set LED %d to color %d (priority %d, is_shared %s)", 
+
+    // Reset any prior animation so a static/off status actually stops animating.
+    // Without this, a LED that was pulsing/blinking keeps doing so forever
+    // (update_all_animations only ever reads state->anim, which nothing else
+    // clears). Callers re-arm a pattern via set_led_pattern() after this.
+    state->anim.type = ANIM_STATIC;
+
+    LOG_DBG("Set LED %d to color %d (priority %d, is_shared %s)",
             led_index, color_idx, priority, state->is_shared ? "yes" : "no");
     
     return 0;
