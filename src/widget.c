@@ -512,11 +512,13 @@ static int indicate_connectivity_ws2812(void) {
         color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_USB;
         LOG_INF("Enhanced USB connection indication");
 #else
-        // On USB the host is connected — don't show any BLE "not connected"
-        // indicator. Turn the connectivity LED off. break unconditionally so we
+        // On USB the host is connected. Don't show the BLE "not connected"
+        // alarm (advertising/disconnected), but keep the connectivity LED lit
+        // with a steady "connected" color so the left half's indicator matches
+        // the right half instead of going dark. break unconditionally so we
         // never fall through into the BLE advertising/disconnected logic below.
-        color_idx = 0; // off
-        LOG_INF("USB connected: connectivity indicator off");
+        color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_CONNECTED;
+        LOG_INF("USB connected: steady connected indicator");
 #endif
         break;
     default: // ZMK_TRANSPORT_BLE
@@ -987,10 +989,11 @@ void indicate_connectivity() { k_work_reschedule(&indicate_connectivity_work, K_
 ZMK_LISTENER(led_output_listener, led_output_listener_cb);
 
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-// run led_output_listener_cb on endpoint and BLE profile change (on central)
-#if IS_ENABLED(CONFIG_RGBLED_WIDGET_CONN_SHOW_USB)
+// run led_output_listener_cb on endpoint and BLE profile change (on central).
+// Subscribe to endpoint changes unconditionally (not only when SHOW_USB) so the
+// connectivity LED updates immediately when the host switches between USB and
+// BLE — otherwise plugging/unplugging USB would not refresh the indicator.
 ZMK_SUBSCRIPTION(led_output_listener, zmk_endpoint_changed);
-#endif
 #if IS_ENABLED(CONFIG_ZMK_BLE)
 ZMK_SUBSCRIPTION(led_output_listener, zmk_ble_active_profile_changed);
 #endif // IS_ENABLED(CONFIG_ZMK_BLE)
