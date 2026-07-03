@@ -523,10 +523,14 @@ static int indicate_battery_enhanced(void) {
     uint8_t color_idx = 0;
     struct animation_state pattern = {0};
     
-    if (widget_usb_powered()) {
-        // Charging. cornix has no charge-status pin, so infer completion from a
-        // near-full battery: green slow breathing while charging, green one-shot
-        // when (approximately) full ("charge complete = green then off").
+    if (widget_usb_powered() && battery_level > 0) {
+        // Charging. cornix has no charge-status pin, so we infer charging from
+        // "USB power present AND a real battery reading". Requiring battery_level
+        // > 0 avoids a false "charging" when the board is merely USB-powered with
+        // the battery switched off / disconnected (VBUS present but no battery to
+        // charge — e.g. while flashing with the power switch off), where the
+        // fuel gauge reads 0. Completion is inferred from a near-full battery:
+        // green slow breathing while charging, green one-shot when full.
         color_idx = WS2812_COLOR_GREEN;
         if (battery_level >= RGBLED_WIDGET_CHARGE_FULL_PCT) {
             pattern.type = ANIM_ONESHOT;
