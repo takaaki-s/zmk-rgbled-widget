@@ -120,6 +120,24 @@ BUILD_ASSERT(!(SHOW_LAYER_CHANGE && SHOW_LAYER_COLORS),
 static const char *color_names[] = {"black", "red",     "green", "yellow",
                                     "blue",  "magenta", "cyan",  "white"};
 
+// Per-BLE-channel (profile) color for the host connection indicator, matching
+// the stock cornix layout where BT channel 0/1/2 = green/red/blue. Extra
+// channels get distinct colors; anything beyond falls back to white.
+static const uint8_t conn_channel_color[] = {
+    WS2812_COLOR_GREEN,   // profile 0
+    WS2812_COLOR_RED,     // profile 1
+    WS2812_COLOR_BLUE,    // profile 2
+    WS2812_COLOR_YELLOW,  // profile 3
+    WS2812_COLOR_MAGENTA, // profile 4
+    WS2812_COLOR_CYAN,    // profile 5
+};
+static inline uint8_t channel_color_for(uint8_t profile_index) {
+    if (profile_index < ARRAY_SIZE(conn_channel_color)) {
+        return conn_channel_color[profile_index];
+    }
+    return WS2812_COLOR_WHITE;
+}
+
 #if SHOW_LAYER_COLORS
 static const uint8_t layer_color_idx[] = {
     CONFIG_RGBLED_WIDGET_LAYER_0_COLOR,  CONFIG_RGBLED_WIDGET_LAYER_1_COLOR,
@@ -552,26 +570,29 @@ static int indicate_connectivity_ws2812(void) {
         break;
     default: // ZMK_TRANSPORT_BLE
 #if IS_ENABLED(CONFIG_ZMK_BLE)
+        // Stock: the host LED shows the active BT-channel color (ch 0/1/2 =
+        // green/red/blue). Assignment (a statement) must come first here since
+        // this directly follows the `default:` label.
+        color_idx = channel_color_for(zmk_ble_active_profile_index());
         if (zmk_ble_active_profile_is_connected()) {
-            color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_CONNECTED;
-            // Stock: on host connect, light once then off (one-shot), not steady.
+            // on connect, light once then off (one-shot), in the channel color
             pattern.type = ANIM_ONESHOT;
             pattern.duration_ms = RGBLED_WIDGET_ONESHOT_MS;
             pattern.start_color = color_idx;
-            LOG_INF("BLE connected indication (one-shot)");
+            LOG_INF("BLE connected (one-shot, channel color %s)", color_names[color_idx]);
         } else if (zmk_ble_active_profile_is_open()) {
-            color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_ADVERTISING;
+            // searching on this channel = slow breathing in the channel color
             pattern.type = ANIM_PULSE;
             pattern.period_ms = 2000;
             pattern.start_color = color_idx;
-            LOG_INF("BLE advertising indication");
+            LOG_INF("BLE searching (breathing, channel color %s)", color_names[color_idx]);
         } else {
-            color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_DISCONNECTED;
-            pattern.type = ANIM_BLINK;
-            pattern.period_ms = 1000;
+            // not connected and not advertising: still show the channel color,
+            // breathing, to indicate it is looking for that channel's host
+            pattern.type = ANIM_PULSE;
+            pattern.period_ms = 2000;
             pattern.start_color = color_idx;
-            pattern.end_color = 0;
-            LOG_INF("BLE disconnected indication");
+            LOG_INF("BLE disconnected (breathing, channel color %s)", color_names[color_idx]);
         }
 #endif
         break;
