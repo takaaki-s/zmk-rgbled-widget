@@ -466,9 +466,12 @@ static int indicate_battery_enhanced(void) {
         pattern.end_color = 0; // Black
     } else if (battery_level <= CONFIG_RGBLED_WIDGET_BATTERY_LEVEL_CRITICAL) {
         color_idx = CONFIG_RGBLED_WIDGET_BATTERY_COLOR_CRITICAL;
-        pattern.type = ANIM_PULSE;
-        pattern.period_ms = 2000;
+        // Stock cornix shows low battery as a normal (hard) red blink, not a
+        // slow breathing pulse — so use ANIM_BLINK here.
+        pattern.type = ANIM_BLINK;
+        pattern.period_ms = 1000;
         pattern.start_color = color_idx;
+        pattern.end_color = 0; // Black
     } else if (battery_level >= CONFIG_RGBLED_WIDGET_BATTERY_LEVEL_HIGH) {
         color_idx = CONFIG_RGBLED_WIDGET_BATTERY_COLOR_HIGH;
         pattern.type = ANIM_STATIC;
@@ -538,10 +541,11 @@ static int indicate_connectivity_ws2812(void) {
         LOG_INF("Enhanced peripheral connected indication");
     } else {
         color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_DISCONNECTED;
-        pattern.type = ANIM_BLINK;
-        pattern.period_ms = 1000;
+        // Stock cornix renders a lost L/R link as a slow breathing pulse
+        // ("blue slow blink"), so use ANIM_PULSE rather than a hard blink.
+        pattern.type = ANIM_PULSE;
+        pattern.period_ms = 2000;
         pattern.start_color = color_idx;
-        pattern.end_color = 0;
         LOG_INF("Enhanced peripheral disconnected indication");
     }
 #endif
