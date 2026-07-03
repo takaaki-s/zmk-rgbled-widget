@@ -638,13 +638,14 @@ static int indicate_connectivity_ws2812(void) {
         pattern.start_color = color_idx;
         LOG_INF("Enhanced peripheral connected indication (one-shot)");
     } else {
-        color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_DISCONNECTED;
-        // Stock cornix renders a lost L/R link as a slow breathing pulse
-        // ("blue slow blink"), so use ANIM_PULSE rather than a hard blink.
+        // Stock: the L/R link indicator is always BLUE — link lost = blue slow
+        // breathing (not red). Use the connected (blue) color with a pulse, not
+        // CONN_COLOR_DISCONNECTED (red).
+        color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_CONNECTED;
         pattern.type = ANIM_PULSE;
         pattern.period_ms = 2000;
         pattern.start_color = color_idx;
-        LOG_INF("Enhanced peripheral disconnected indication");
+        LOG_INF("Enhanced peripheral disconnected indication (blue breathing)");
     }
 #endif
     
