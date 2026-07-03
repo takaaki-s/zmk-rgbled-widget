@@ -545,26 +545,20 @@ static int indicate_battery_enhanced(void) {
         // LED anyway), so show nothing: leave the battery LED off, no pattern.
         color_idx = 0; // off
         pattern.type = ANIM_STATIC;
-    } else if (battery_level <= CONFIG_RGBLED_WIDGET_BATTERY_LEVEL_CRITICAL) {
+    } else if (battery_level <= CONFIG_RGBLED_WIDGET_BATTERY_LEVEL_LOW) {
+        // "Low battery" warning (<= LOW threshold, default 20%). Stock cornix
+        // shows this as a normal (hard) red blink, not a breathing pulse.
         color_idx = CONFIG_RGBLED_WIDGET_BATTERY_COLOR_CRITICAL;
-        // Stock cornix shows low battery as a normal (hard) red blink, not a
-        // slow breathing pulse — so use ANIM_BLINK here.
         pattern.type = ANIM_BLINK;
         pattern.period_ms = 1000;
         pattern.start_color = color_idx;
         pattern.end_color = 0; // Black
-    } else if (battery_level >= CONFIG_RGBLED_WIDGET_BATTERY_LEVEL_HIGH) {
-        color_idx = CONFIG_RGBLED_WIDGET_BATTERY_COLOR_HIGH;
-        pattern.type = ANIM_STATIC;
-        pattern.start_color = color_idx;
-    } else if (battery_level >= CONFIG_RGBLED_WIDGET_BATTERY_LEVEL_LOW) {
-        color_idx = CONFIG_RGBLED_WIDGET_BATTERY_COLOR_MEDIUM;
-        pattern.type = ANIM_STATIC;
-        pattern.start_color = color_idx;
     } else {
-        color_idx = CONFIG_RGBLED_WIDGET_BATTERY_COLOR_LOW;
+        // Battery is fine (above the low-battery threshold) and not charging.
+        // Stock cornix is NOT always-on: it shows no battery indicator here, so
+        // leave the LED off instead of a persistent level color.
+        color_idx = 0; // off
         pattern.type = ANIM_STATIC;
-        pattern.start_color = color_idx;
     }
     
     LOG_INF("Enhanced battery indication: level %d%%, color %s, pattern %d", 
