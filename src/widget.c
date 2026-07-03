@@ -209,6 +209,13 @@ static const struct device *ws2812_dev = DEVICE_DT_GET(WS2812_NODE);
 #define CONFIG_RGBLED_WIDGET_BRIGHTNESS 64
 #endif
 
+// How long a one-shot "positive" indication (connected / link established /
+// charge complete) stays lit before turning itself off, matching the stock
+// cornix "light once then off" behavior.
+#ifndef RGBLED_WIDGET_ONESHOT_MS
+#define RGBLED_WIDGET_ONESHOT_MS 1000
+#endif
+
 // Global LED state array
 static struct led_state led_states[CONFIG_RGBLED_WIDGET_LED_COUNT] = {0};
 static struct led_rgb led_colors[CONFIG_RGBLED_WIDGET_LED_COUNT] = {0};
@@ -361,13 +368,20 @@ static int set_led_pattern(uint8_t led_index, struct animation_state *pattern) {
         }
         break;
         
+    case ANIM_ONESHOT:
+        // Light the color now and stamp the arm time; update_led_animation()
+        // turns it off once duration_ms has elapsed.
+        led_states[led_index].anim.start_time = k_uptime_get_32();
+        ws2812_set_led(led_index, pattern->start_color);
+        break;
+
     case ANIM_WAVE:
     case ANIM_RAINBOW:
         // Not implemented yet - fallback to static
         ws2812_set_led(led_index, pattern->start_color);
         break;
     }
-    
+
     return 0;
 }
 
@@ -437,12 +451,23 @@ static void update_led_animation(uint8_t led_index) {
             ws2812_update_strip();
         }
         break;
-        
+
+    case ANIM_ONESHOT:
+        {
+            // Stay lit until duration_ms elapses, then turn off and stop.
+            uint32_t elapsed = current_time - anim->start_time;
+            if (elapsed >= anim->duration_ms) {
+                ws2812_set_led(led_index, 0); // off
+                anim->type = ANIM_STATIC;     // one-shot done, stop animating
+            }
+        }
+        break;
+
     default:
         // Unsupported animation types
         break;
     }
-    
+
     last_update = current_time;
 }
 
@@ -525,7 +550,11 @@ static int indicate_connectivity_ws2812(void) {
 #if IS_ENABLED(CONFIG_ZMK_BLE)
         if (zmk_ble_active_profile_is_connected()) {
             color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_CONNECTED;
-            LOG_INF("BLE connected indication");
+            // Stock: on host connect, light once then off (one-shot), not steady.
+            pattern.type = ANIM_ONESHOT;
+            pattern.duration_ms = RGBLED_WIDGET_ONESHOT_MS;
+            pattern.start_color = color_idx;
+            LOG_INF("BLE connected indication (one-shot)");
         } else if (zmk_ble_active_profile_is_open()) {
             color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_ADVERTISING;
             pattern.type = ANIM_PULSE;
@@ -546,7 +575,11 @@ static int indicate_connectivity_ws2812(void) {
 #elif IS_ENABLED(CONFIG_ZMK_SPLIT_BLE)
     if (zmk_split_bt_peripheral_is_connected()) {
         color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_CONNECTED;
-        LOG_INF("Enhanced peripheral connected indication");
+        // Stock: on L/R link established, blue lights once then off (one-shot).
+        pattern.type = ANIM_ONESHOT;
+        pattern.duration_ms = RGBLED_WIDGET_ONESHOT_MS;
+        pattern.start_color = color_idx;
+        LOG_INF("Enhanced peripheral connected indication (one-shot)");
     } else {
         color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_DISCONNECTED;
         // Stock cornix renders a lost L/R link as a slow breathing pulse

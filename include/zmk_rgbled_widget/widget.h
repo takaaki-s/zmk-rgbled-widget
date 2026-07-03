@@ -44,7 +44,8 @@ enum animation_type {
     ANIM_PULSE = 2,
     ANIM_FADE = 3,
     ANIM_WAVE = 4,
-    ANIM_RAINBOW = 5
+    ANIM_RAINBOW = 5,
+    ANIM_ONESHOT = 6  // light start_color once for duration_ms, then off and stop
 };
 
 // Animation state structure
@@ -55,6 +56,7 @@ struct animation_state {
     uint8_t start_color;
     uint8_t end_color;
     bool loop;
+    uint32_t start_time;  // ANIM_ONESHOT: uptime (ms) when the one-shot was armed
 };
 
 // Core WS2812 control functions
