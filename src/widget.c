@@ -234,6 +234,28 @@ static const struct device *ws2812_dev = DEVICE_DT_GET(WS2812_NODE);
 #define RGBLED_WIDGET_ONESHOT_MS 1000
 #endif
 
+// Battery percentage at/above which we treat the pack as "charge complete".
+// cornix has no charge-status pin, so completion is inferred from level.
+#ifndef RGBLED_WIDGET_CHARGE_FULL_PCT
+#define RGBLED_WIDGET_CHARGE_FULL_PCT 97
+#endif
+
+// Detect whether USB (VBUS) charging power is present. On the central ZMK's USB
+// stack reports it; on a split peripheral ZMK forbids CONFIG_ZMK_USB (it depends
+// on the central role), so read the nRF52 USB-regulator VBUS-detect bit directly
+// — this senses charging power WITHOUT enumerating any USB device.
+#if IS_ENABLED(CONFIG_ZMK_USB)
+#include <zmk/usb.h>
+static inline bool widget_usb_powered(void) { return zmk_usb_is_powered(); }
+#elif IS_ENABLED(CONFIG_SOC_SERIES_NRF52X)
+#include <hal/nrf_power.h>
+static inline bool widget_usb_powered(void) {
+    return nrf_power_usbregstatus_vbusdet_get(NRF_POWER);
+}
+#else
+static inline bool widget_usb_powered(void) { return false; }
+#endif
+
 // Global LED state array
 static struct led_state led_states[CONFIG_RGBLED_WIDGET_LED_COUNT] = {0};
 static struct led_rgb led_colors[CONFIG_RGBLED_WIDGET_LED_COUNT] = {0};
@@ -501,7 +523,23 @@ static int indicate_battery_enhanced(void) {
     uint8_t color_idx = 0;
     struct animation_state pattern = {0};
     
-    if (battery_level == 0) {
+    if (widget_usb_powered()) {
+        // Charging. cornix has no charge-status pin, so infer completion from a
+        // near-full battery: green slow breathing while charging, green one-shot
+        // when (approximately) full ("charge complete = green then off").
+        color_idx = WS2812_COLOR_GREEN;
+        if (battery_level >= RGBLED_WIDGET_CHARGE_FULL_PCT) {
+            pattern.type = ANIM_ONESHOT;
+            pattern.duration_ms = RGBLED_WIDGET_ONESHOT_MS;
+            pattern.start_color = color_idx;
+            LOG_INF("Charge complete (~%d%%): green one-shot", battery_level);
+        } else {
+            pattern.type = ANIM_PULSE;
+            pattern.period_ms = 2000;
+            pattern.start_color = color_idx;
+            LOG_INF("Charging (%d%%): green breathing", battery_level);
+        }
+    } else if (battery_level == 0) {
         // battery_level 0 means "not reporting / missing", not a real 0%. Stock
         // cornix has no such indicator (and a truly dead battery cannot light an
         // LED anyway), so show nothing: leave the battery LED off, no pattern.
@@ -1277,6 +1315,21 @@ extern void led_process_thread(void *d0, void *d1, void *d2) {
         // Update animations
 #   if IS_ENABLED(CONFIG_RGBLED_WIDGET_ANIMATIONS)
         update_all_animations();
+#   endif
+
+#   if IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
+        // Poll USB (VBUS) power so charging indication updates on plug/unplug.
+        // The peripheral has no USB conn-state event, so we poll here each tick.
+        {
+            static bool usb_pwr_init = false;
+            static bool usb_pwr_prev = false;
+            bool usb_pwr_now = widget_usb_powered();
+            if (initialized && (!usb_pwr_init || usb_pwr_now != usb_pwr_prev)) {
+                usb_pwr_init = true;
+                usb_pwr_prev = usb_pwr_now;
+                indicate_battery();
+            }
+        }
 #   endif
 #endif
         // Only act on a real dequeued item. k_msgq_get() returns -EAGAIN on
