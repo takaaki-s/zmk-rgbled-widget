@@ -538,12 +538,16 @@ static int indicate_connectivity_ws2812(void) {
         LOG_INF("Enhanced USB connection indication");
 #else
         // On USB the host is connected. Don't show the BLE "not connected"
-        // alarm (advertising/disconnected), but keep the connectivity LED lit
-        // with a steady "connected" color so the left half's indicator matches
-        // the right half instead of going dark. break unconditionally so we
-        // never fall through into the BLE advertising/disconnected logic below.
+        // alarm (advertising/disconnected); instead treat it as connected and
+        // light once then off (one-shot), matching the stock "connected = light
+        // once then off" behavior — same as BLE connected and the split link.
+        // break unconditionally so we never fall through into the BLE
+        // advertising/disconnected logic below.
         color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_CONNECTED;
-        LOG_INF("USB connected: steady connected indicator");
+        pattern.type = ANIM_ONESHOT;
+        pattern.duration_ms = RGBLED_WIDGET_ONESHOT_MS;
+        pattern.start_color = color_idx;
+        LOG_INF("USB connected: one-shot connected indicator");
 #endif
         break;
     default: // ZMK_TRANSPORT_BLE
