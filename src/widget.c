@@ -1176,9 +1176,17 @@ static int led_battery_listener_cb(const zmk_event_t *eh) {
         return 0;
     }
 
-    // check if we are in critical battery levels at state change, blink if we are
     uint8_t battery_level = as_zmk_battery_state_changed(eh)->state_of_charge;
 
+#if IS_ENABLED(CONFIG_RGBLED_WIDGET_WS2812)
+    // Re-evaluate the enhanced pattern (idle-off / low blink / charging /
+    // complete) whenever the level changes — the enhanced path is otherwise
+    // only refreshed at boot and on USB plug/unplug, so a level crossing (e.g.
+    // dropping under LOW=20%) would be missed until the next power event.
+    (void)battery_level;
+    indicate_battery_enhanced();
+#else
+    // check if we are in critical battery levels at state change, blink if we are
     if (battery_level > 0 && battery_level <= CONFIG_RGBLED_WIDGET_BATTERY_LEVEL_CRITICAL) {
         LOG_BATTERY(battery_level, CRITICAL);
 
@@ -1188,6 +1196,7 @@ static int led_battery_listener_cb(const zmk_event_t *eh) {
                     blink.duration_ms, battery_level);
         k_msgq_put(&led_msgq, &blink, K_NO_WAIT);
     }
+#endif
     return 0;
 }
 
